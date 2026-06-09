@@ -8,6 +8,7 @@ const LINKS: { href: string; label: string }[] = [
   { href: "/profile", label: "Profile" },
   { href: "/carers", label: "Carers" },
   { href: "/settings", label: "Settings" },
+  { href: "/status", label: "Status" },
 ];
 
 export default function Nav() {
