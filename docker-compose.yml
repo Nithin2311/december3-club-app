@@ -1,0 +1,87 @@
+# docker-compose.yml — December3.club
+# Bring up:    docker compose up -d --build   (or: make up)
+# Stop:        docker compose down            (or: make down)
+# Full reset:  docker compose down -v         (destroys db volume)
+#
+# Dev defaults to SITE_ADDRESS=:80 (plain HTTP on localhost, no TLS).
+# Production: set SITE_ADDRESS=your.domain + ACME_EMAIL in .env for Caddy auto-TLS.
+
+name: december3
+
+networks:
+  dec3_internal:
+    driver: bridge
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
+
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [dec3_internal]
+    depends_on:
+      - web
+      - api
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    image: dec3-web:local
+    restart: unless-stopped
+    environment:
+      API_INTERNAL_URL: http://api:8000
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost}
+      NODE_ENV: production
+    networks: [dec3_internal]
+    depends_on:
+      - api
+
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+    image: dec3-api:local
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://dec3:${POSTGRES_PASSWORD}@db:5432/dec3
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODEL: ${GEMINI_MODEL:-gemini-2.5-flash}
+      SESSION_SECRET: ${SESSION_SECRET}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+    networks: [dec3_internal]
+    depends_on:
+      db:
+        condition: service_healthy
+
+  db:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dec3
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: dec3
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
+    networks: [dec3_internal]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dec3 -d dec3"]
+      interval: 10s
+      timeout: 5s
+      retries: 5

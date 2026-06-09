@@ -1,0 +1,15 @@
+# December3.club reverse proxy.
+# SITE_ADDRESS is ":80" in dev (plain HTTP) or a domain in prod (auto-TLS).
+# handle_path strips the /api prefix before proxying, so FastAPI routes are
+# defined without /api (e.g. /health, /moderation) and reached at /api/* by clients.
+{$SITE_ADDRESS} {
+	encode zstd gzip
+
+	handle_path /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}
