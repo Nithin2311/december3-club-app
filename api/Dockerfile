@@ -6,10 +6,11 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# Package build (setuptools) needs the app package present at install time.
 COPY pyproject.toml ./
-RUN pip install .
-
 COPY app ./app
+
+RUN pip install .
 
 EXPOSE 8000
 
